@@ -5,3 +5,5 @@ This is simply a text file to link example data sets from various beamlines: the
 | Facility | Beamline | Detector | Data set link | Data set description | Version |
 | -------- | -------- | -------- | ------------- | ---------------------| --------| 
 | DLS      | I24      | JF1M     | https://zenodo.org/records/15017658 | Jungfrau 1M example data set | beta |
+
+To contribute examples please fork this repo, edit the markdown and make a PR.
