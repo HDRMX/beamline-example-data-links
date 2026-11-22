@@ -1,0 +1,10 @@
+{
+  "title": "DIALS 3.31.0 Benchmark",
+  "heading": "DIALS 3.31.0 benchmark report",
+  "dials": "3.31 (release 3.31.0)",
+  "dxtbx": "3.31.0",
+  "python": "3.14.10 (numpy 2.5.4, scipy 1.18.1, h5py 3.16.0)",
+  "build_note": "DIALS is the 3.31.0 release; dials.version reports it as DIALS 3.31.",
+  "dates": "21 November 2026",
+  "note": "dials.scale is run with its defaults, so no resolution cutoff is applied to any dataset. The headline resolution, CC½, completeness and multiplicity are therefore for all scaled data. The \"suggested\" columns give the same statistics at the resolution limit dials.merge suggests, where a fit of CC½ falls to 0.3. In all_results.csv, overall_* holds the uncut statistics and suggested_* the statistics at the suggested limit."
+}

@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+  :root {
+    --color-fg: #1c1f24; --color-fg-muted: #5c6470; --color-bg: #fbfbfa; --color-panel: #f3f4f2; --color-border-line: #dcdfdb;
+    --cds-chart-muted: #c9cdd2; --cds-surface-popover: #ffffff; --cds-border: #d3d7d2; --cds-text-secondary: #5c6470;
+    --cds-shadow-popover: 0 4px 14px rgba(0,0,0,.12);
+    --c0: #2f6fb3; --c1: #c2572b; --c2: #8a5fb0; --c3: #2f9a8a;
+    --font-anthropic-sans: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-anthropic-serif: Georgia, "Times New Roman", serif;
+    --cds-font-size-caption: 0.8125rem; --cds-font-size-body: 1rem; --cds-font-size-heading: 1.125rem; --cds-font-size-title: 2rem;
+    --cds-font-weight-medium: 600;
+    --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 14px; --cds-gap-lg: 20px; --cds-gap-xl: 32px;
+    --cds-pad-lg: 16px; --cds-radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --color-fg: #e8eaed; --color-fg-muted: #9aa2ad; --color-bg: #15171a; --color-panel: #1e2125; --color-border-line: #33383f;
+      --cds-chart-muted: #454b53; --cds-surface-popover: #262a2f; --cds-border: #3a4048; --cds-text-secondary: #9aa2ad;
+      --cds-shadow-popover: 0 4px 14px rgba(0,0,0,.5);
+      --c0: #6aa6e6; --c1: #e58a5e; --c2: #b596d8; --c3: #5fc4b3;
+    }
+  }
+  html { background: var(--color-bg); }
+  body { margin: 0 auto; max-width: 1180px; padding: 32px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px)); background: var(--color-bg); font-size: 16px; }
+  select.dash-select { font: inherit; font-size: var(--cds-font-size-caption); padding: 6px 10px; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background-color: var(--color-panel); color: var(--color-fg); }
+  .bm-codewrap { overflow-x: auto; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); }
+  .bm-code { margin: 0; padding: var(--cds-pad-lg); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--cds-font-size-caption); line-height: 1.5; color: var(--color-fg); white-space: pre; tab-size: 4; }
+</style>
+</head>
+<body>
+<script>
+  // Minimal stand-ins for the hosted dashboard runtime, so this file works on its own and offline.
+  const BM_DATA = { entries: {{DATA}} };
+  const d3 = {
+    median: (a) => { const s = a.slice().sort((x, y) => x - y); if (!s.length) return undefined; const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; },
+    max: (a, f) => { let m; a.forEach((d) => { const v = f ? f(d) : d; if (v != null && (m === undefined || v > m)) m = v; }); return m; },
+    format: () => (n) => Number(n).toLocaleString('en-US')
+  };
+  const dash = (() => {
+    const calcs = {}, draws = {};
+    const data = (id) => {
+      if (BM_DATA[id]) return { status: 'ok', data: BM_DATA[id] };
+      if (calcs[id]) { if (!('value' in calcs[id])) calcs[id].value = calcs[id].fn(...calcs[id].inputs.map((i) => data(i).data)); return { status: 'ok', data: calcs[id].value }; }
+      return { status: 'missing', data: null };
+    };
+    const run = (name) => document.querySelectorAll('[data-draw="' + name + '"]').forEach((el) => draws[name](el));
+    return {
+      colors: ['var(--c0)', 'var(--c1)', 'var(--c2)', 'var(--c3)'],
+      data: data,
+      calc: (id, def) => { calcs[id] = def; },
+      draw: (name, fn) => { if (fn) draws[name] = fn; else run(name); },
+      runAll: () => Object.keys(draws).forEach(run)
+    };
+  })();
+</script>
+<meta name="dash-one-writer">
+<style>
+  .bm { display: flex; flex-direction: column; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); color: var(--color-fg); }
+  .bm-head { display: flex; flex-direction: column; gap: var(--cds-gap-sm); }
+  .bm-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .bm-lede { margin: 0; max-width: 68ch; font-size: var(--cds-font-size-body); line-height: 1.5; }
+  .bm-lede b, .bm-note b { font-weight: var(--cds-font-weight-medium); font-variant-numeric: tabular-nums; }
+  .bm-h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; text-wrap: balance; }
+  .bm-sub { margin: 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); max-width: 68ch; line-height: 1.45; }
+  .bm-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: var(--cds-gap-md); }
+  .bm-tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-xs); min-width: 0; }
+  .bm-tile-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); display: flex; align-items: center; gap: 6px; }
+  .bm-tile-num { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: 2rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .bm-tile-hint { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .bm-dot { width: 9px; height: 9px; border-radius: 2px; flex: none; display: inline-block; }
+  .bm-sec { display: flex; flex-direction: column; gap: var(--cds-gap-md); min-width: 0; }
+  .bm-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--cds-gap-xl); }
+  .bm-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .bm-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .bm-chart { position: relative; min-height: 300px; display: flex; flex-direction: column; gap: var(--cds-gap-md); }
+  .bm-steps { min-height: 280px; }
+  .bm-row { display: flex; flex-direction: column; gap: 4px; }
+  .bm-row-head { display: flex; justify-content: space-between; gap: 12px; font-size: var(--cds-font-size-caption); }
+  .bm-row-head span:last-child { color: var(--color-fg-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bm-bar { display: flex; height: 20px; gap: 2px; }
+  .bm-seg { height: 100%; border-radius: 2px; min-width: 2px; }
+  .bm-step { display: grid; grid-template-columns: 7.5em 1fr 2.5em; align-items: center; gap: 10px; font-size: var(--cds-font-size-caption); }
+  .bm-step-track { height: 16px; }
+  .bm-step-fill { height: 100%; border-radius: 2px; min-width: 0; }
+  .bm-step-n { text-align: right; font-variant-numeric: tabular-nums; }
+  .bm-step-zero { color: var(--color-fg-muted); }
+  .bm-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); box-shadow: var(--cds-shadow-popover); border-radius: var(--cds-radius); padding: 6px 9px; font-size: var(--cds-font-size-caption); white-space: nowrap; z-index: 2; }
+  .bm-tip small { display: block; color: var(--cds-text-secondary); font-size: inherit; }
+  .bm-msg { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .bm-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--cds-gap-md); }
+  .bm-tablewrap { overflow-x: auto; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); max-height: 640px; overflow-y: auto; }
+  .bm-table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .bm-table th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); padding: 8px 10px; border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .bm-table td { padding: 7px 10px; border-bottom: 1px solid var(--color-border-line); white-space: nowrap; vertical-align: top; }
+  .bm-table tr:last-child td { border-bottom: 0; }
+  .bm-table .bm-r { text-align: right; }
+  .bm-table td.bm-wrap { white-space: normal; min-width: 22ch; max-width: 46ch; color: var(--color-fg-muted); }
+  .bm-table td.bm-id { font-weight: var(--cds-font-weight-medium); }
+  .bm-pill { display: inline-flex; align-items: center; gap: 6px; }
+  .bm-notes { display: flex; flex-direction: column; gap: var(--cds-gap-sm); margin: 0; padding-left: 1.1em; max-width: 72ch; line-height: 1.5; }
+  @media print { .bm-tablewrap { max-height: none; } }
+</style>
+
+<div class="bm">
+  <header class="bm-head">
+    <h1 class="bm-title" id="top">{{HEADING}}</h1>
+    <p class="bm-lede"><b data-draw="count" data-source="status_counts" data-field="n" data-where="status=Finished">—</b> of <b data-draw="count" data-source="status_counts" data-field="n" data-where="status=Total">—</b> public depositions have reached a final state. <b data-draw="count" data-source="status_counts" data-field="n" data-where="status=Complete">—</b> ran through the whole fixed pipeline, <b data-draw="count" data-source="status_counts" data-field="n" data-where="status=Failed">—</b> stopped at a step, and <b data-draw="count" data-source="status_counts" data-field="n" data-where="status=Download failed">—</b> could not be downloaded.</p>
+    <p class="bm-sub">Every entry is put once through the same script: import, spot finding, indexing, refinement, integration, symmetry, scaling, export and merging, with no per-dataset options. A failure is recorded as a result and is not repaired.</p>
+  </header>
+
+  <section class="bm-tiles" id="tiles">
+    <div class="bm-tile"><span class="bm-tile-label"><i class="bm-dot" data-status="Complete"></i>Complete</span><span class="bm-tile-num" data-draw="count" data-source="status_counts" data-field="n" data-where="status=Complete">—</span><span class="bm-tile-hint">Pipeline ran through merging</span></div>
+    <div class="bm-tile"><span class="bm-tile-label"><i class="bm-dot" data-status="Failed"></i>Failed</span><span class="bm-tile-num" data-draw="count" data-source="status_counts" data-field="n" data-where="status=Failed">—</span><span class="bm-tile-hint">Pipeline stopped at a step</span></div>
+    <div class="bm-tile"><span class="bm-tile-label"><i class="bm-dot" data-status="Download failed"></i>Download failed</span><span class="bm-tile-num" data-draw="count" data-source="status_counts" data-field="n" data-where="status=Download failed">—</span><span class="bm-tile-hint">No raw data obtained</span></div>
+    <div class="bm-tile"><span class="bm-tile-label"><i class="bm-dot" data-status="Active"></i>In flight</span><span class="bm-tile-num" data-draw="count" data-source="status_counts" data-field="n" data-where="status=Active">—</span><span class="bm-tile-hint">Waiting or processing now</span></div>
+    <div class="bm-tile"><span class="bm-tile-label"><i class="bm-dot" data-status="Not started"></i>Not started</span><span class="bm-tile-num" data-draw="count" data-source="status_counts" data-field="n" data-where="status=Not started">—</span><span class="bm-tile-hint">Not yet queued</span></div>
+  </section>
+
+  <p class="bm-lede bm-note" id="quality">Among completed entries, the median high-resolution limit is <b data-draw="summary" data-source="summary" data-field="median_d_min" data-row="0">—</b> Å with no resolution cutoff applied, the median overall CC½ is <b data-draw="summary" data-source="summary" data-field="median_cc_half" data-row="0">—</b>, and the median pipeline run takes <b data-draw="summary" data-source="summary" data-field="median_minutes" data-row="0">—</b> minutes on 24 cores.</p>
+  <p class="bm-sub" id="round-note"><b>About the statistics.</b> {{NOTE}}</p>
+
+  <div class="bm-two">
+    <section class="bm-sec" id="by-repository">
+      <h2 class="bm-h2">Results by repository</h2>
+      <p class="bm-sub">Bars are drawn to one scale, so their length is the number of entries each repository holds.</p>
+      <div class="bm-legend">
+        <span><i class="bm-dot" data-status="Complete"></i>Complete</span>
+        <span><i class="bm-dot" data-status="Failed"></i>Failed</span>
+        <span><i class="bm-dot" data-status="Download failed"></i>Download failed</span>
+        <span><i class="bm-dot" data-status="Active"></i>In flight</span>
+        <span><i class="bm-dot" data-status="Not started"></i>Not started</span>
+      </div>
+      <div class="bm-chart" data-draw="repochart" data-source="by_repo" role="img" aria-label="Stacked bars of entry status for each data repository"></div>
+    </section>
+
+    <section class="bm-sec" id="failed-steps">
+      <h2 class="bm-h2">Where the pipeline stopped</h2>
+      <p class="bm-sub">Failed entries counted by the first step that did not finish. Input selection means the fixed file rule found nothing to hand to dials.import.</p>
+      <div class="bm-chart bm-steps" data-draw="stepchart" data-source="fail_steps" role="img" aria-label="Bars of failed entries for each pipeline step"></div>
+    </section>
+  </div>
+
+  <section class="bm-sec" id="reported">
+    <div class="bm-tools">
+      <h2 class="bm-h2">All datasets</h2>
+      <select class="dash-select" id="bm-filter" aria-label="Show status">
+        <option value="">All reported</option>
+        <option value="Complete">Complete</option>
+        <option value="Failed">Failed</option>
+        <option value="Download failed">Download failed</option>
+      </select>
+    </div>
+    <p class="bm-sub">Most recently reported first. Resolution, CC½, completeness and multiplicity are the overall values written by dials.merge for all scaled data, with no resolution cutoff. The "suggested" columns are the statistics dials.merge reports for the same data cut at the limit DIALS suggests, where a fit of CC½ falls to 0.3.</p>
+    <div class="bm-tablewrap">
+      <table class="bm-table" data-source="entries" data-row-key="entry">
+        <thead>
+          <tr>
+            <th data-field="entry">Entry</th>
+            <th data-field="status">Status</th>
+            <th data-field="failed_step">Stopped at</th>
+            <th data-field="repository">Repository</th>
+            <th data-field="facility">Facility</th>
+            <th data-field="beamline">Beamline</th>
+            <th data-field="detector">Detector</th>
+            <th data-field="space_group">Space group</th>
+            <th data-field="sweeps" class="bm-r">Sweeps</th>
+            <th data-field="images" class="bm-r">Images</th>
+            <th data-field="pct_indexed" class="bm-r">Indexed (%)</th>
+            <th data-field="d_min" class="bm-r">d min (Å)</th>
+            <th data-field="sugg_d_min" class="bm-r">d min, suggested (Å)</th>
+            <th data-field="cc_half" class="bm-r">CC½</th>
+            <th data-field="sugg_cc_half" class="bm-r">CC½, suggested</th>
+            <th data-field="completeness" class="bm-r">Complete (%)</th>
+            <th data-field="sugg_completeness" class="bm-r">Complete, suggested (%)</th>
+            <th data-field="multiplicity" class="bm-r">Multiplicity</th>
+            <th data-field="seconds" class="bm-r">Run time (s)</th>
+            <th data-field="note">Download note</th>
+          </tr>
+        </thead>
+        <tbody data-draw="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="bm-sec" id="caveats">
+    <h2 class="bm-h2">How to read the failures</h2>
+    <ul class="bm-notes">
+      <li>Some failures come from the benchmark harness and say nothing about DIALS. Examples are a gap in the image numbering of a sweep (reported by dials.import as missing images), depositions that hold fewer than ten images per sweep, and a few downloads that stopped on a missing-directory error or an incomplete rsync transfer.</li>
+      <li>Serial and XFEL depositions (CXIDB, SACLA, PAL-XFEL, PLS-II) either exceed the 500 GB download cap or hold file types the rotation input rule does not select. They are recorded as they fell, mostly as input selection failures or failed downloads.</li>
+      <li>ESRF data portal entries need a session login or are archived to tape, so they were not fetched.</li>
+      <li>Low CC½ or low completeness in a completed row is reported as measured. "Complete" only means the script ran through dials.merge. No mask, resolution limit or repair was applied to any entry.</li>
+    </ul>
+  </section>
+
+  <section class="bm-sec" id="pipeline-script">
+    <h2 class="bm-h2">The pipeline script</h2>
+    <p class="bm-sub">This is tldr.sh, the one script every entry is run through. Its arguments are the image files, templates or master files chosen by the fixed input rule, and they go to dials.import unchanged.</p>
+    <div class="bm-codewrap"><pre class="bm-code"><code>{{SCRIPT}}</code></pre></div>
+  </section>
+
+  <section class="bm-sec" id="system">
+    <h2 class="bm-h2">System and software</h2>
+    <p class="bm-sub">Every entry was processed on the same machine with the same build. {{BUILD_NOTE}}</p>
+    <div style="overflow-x: auto;">
+      <table style="border-collapse: collapse; font-size: 14px;">
+        <tbody>
+          <tr><th scope="row" style="text-align: left; font-weight: 600; padding: 6px 24px 6px 0; white-space: nowrap;">DIALS</th><td style="padding: 6px 0;">{{DIALS}}</td></tr>
+          <tr><th scope="row" style="text-align: left; font-weight: 600; padding: 6px 24px 6px 0; white-space: nowrap;">dxtbx</th><td style="padding: 6px 0;">{{DXTBX}}</td></tr>
+          <tr><th scope="row" style="text-align: left; font-weight: 600; padding: 6px 24px 6px 0; white-space: nowrap;">Python</th><td style="padding: 6px 0;">{{PYTHON}}</td></tr>
+          <tr><th scope="row" style="text-align: left; font-weight: 600; padding: 6px 24px 6px 0; white-space: nowrap;">Linux</th><td style="padding: 6px 0;">Rocky Linux 9.7 (Blue Onyx), kernel 5.14.0-611.49.1.el9_7.x86_64</td></tr>
+          <tr><th scope="row" style="text-align: left; font-weight: 600; padding: 6px 24px 6px 0; white-space: nowrap;">Hardware</th><td style="padding: 6px 0;">2 × AMD EPYC 9554 64-core, 224 logical CPUs, 1.5 TB RAM</td></tr>
+          <tr><th scope="row" style="text-align: left; font-weight: 600; padding: 6px 24px 6px 0; white-space: nowrap;">Parallelism</th><td style="padding: 6px 0;">nproc=24 per entry, up to 8 entries side by side</td></tr>
+          <tr><th scope="row" style="text-align: left; font-weight: 600; padding: 6px 24px 6px 0; white-space: nowrap;">Run dates</th><td style="padding: 6px 0;">{{DATES}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <p class="bm-sub">Snapshot of {{STAMP}} UTC. This is a static copy.</p>
+</div>
+
+<script>
+  const BM_COLORS = {
+    'Complete': dash.colors[0],
+    'Failed': dash.colors[1],
+    'Download failed': dash.colors[2],
+    'Active': dash.colors[3],
+    'Not started': 'var(--cds-chart-muted)'
+  };
+  const BM_LABEL = { 'Active': 'In flight' };
+  const BM_ORDER = ['Complete', 'Failed', 'Download failed', 'Active', 'Not started'];
+  const BM_STEPS = ['input_selection', 'import', 'find_spots', 'index', 'refine', 'integrate', 'symmetry', 'scale', 'export', 'merge'];
+  const bmGroup = (s) => (s === 'Downloading' || s === 'Downloaded' || s === 'In-progress') ? 'Active' : s;
+  const bmNum = (v) => (v === null || v === undefined || v === '') ? null : +v;
+  const bmFmt = d3.format(',');
+
+  dash.calc('status_counts', {
+    inputs: ['entries'],
+    title: 'Entries by status',
+    description: 'Count of entries in each status. Active is downloading, downloaded or in progress; Finished is complete, failed or download failed.',
+    fn: (entries) => {
+      const n = {};
+      BM_ORDER.forEach((s) => { n[s] = 0; });
+      entries.forEach((e) => { const g = bmGroup(e.status); n[g] = (n[g] || 0) + 1; });
+      const rows = BM_ORDER.map((s) => ({ status: s, n: n[s] }));
+      rows.push({ status: 'Finished', n: n['Complete'] + n['Failed'] + n['Download failed'] });
+      rows.push({ status: 'Total', n: entries.length });
+      return rows;
+    }
+  });
+
+  dash.calc('by_repo', {
+    inputs: ['entries'],
+    title: 'Status by repository',
+    description: 'Entries in each status for each data repository.',
+    fn: (entries) => {
+      const m = new Map();
+      entries.forEach((e) => {
+        if (!m.has(e.repository)) { const r = { repository: e.repository, total: 0 }; BM_ORDER.forEach((s) => { r[s] = 0; }); m.set(e.repository, r); }
+        const r = m.get(e.repository);
+        r[bmGroup(e.status)] += 1;
+        r.total += 1;
+      });
+      return Array.from(m.values()).sort((a, b) => b.total - a.total);
+    }
+  });
+
+  dash.calc('fail_steps', {
+    inputs: ['entries'],
+    title: 'Failed entries by step',
+    description: 'Entries with status Failed, counted by the first pipeline step that did not finish.',
+    fn: (entries) => BM_STEPS.map((step) => ({ step: step, n: entries.filter((e) => e.status === 'Failed' && e.failed_step === step).length }))
+  });
+
+  dash.calc('summary', {
+    inputs: ['entries'],
+    title: 'Medians over completed entries',
+    description: 'Median overall high-resolution limit, overall CC half and total pipeline run time (minutes) of entries with status Complete.',
+    fn: (entries) => {
+      const done = entries.filter((e) => e.status === 'Complete');
+      const med = (col) => d3.median(done.map((e) => bmNum(e[col])).filter((v) => v !== null && !isNaN(v)));
+      const r = (v, p) => (v === undefined ? null : +v.toFixed(p));
+      const secs = med('seconds');
+      return [{ median_d_min: r(med('d_min'), 2), median_cc_half: r(med('cc_half'), 3), median_minutes: r(secs === undefined ? undefined : secs / 60, 1) }];
+    }
+  });
+
+  document.querySelectorAll('.bm-dot[data-status]').forEach((el) => { el.style.background = BM_COLORS[el.dataset.status]; });
+
+  dash.draw('count', (el) => {
+    const c = dash.data('status_counts');
+    const key = (el.dataset.where || '').split('=')[1];
+    const row = c.status === 'ok' && Array.isArray(c.data) ? c.data.find((d) => d.status === key) : null;
+    el.textContent = row ? bmFmt(row.n) : '—';
+  });
+
+  dash.draw('summary', (el) => {
+    const c = dash.data('summary');
+    const v = c.status === 'ok' && Array.isArray(c.data) && c.data[0] ? c.data[0][el.dataset.field] : null;
+    el.textContent = (v === null || v === undefined) ? '—' : String(v);
+  });
+
+  function bmMessage(el, c) {
+    const p = document.createElement('p');
+    p.className = 'bm-msg';
+    p.textContent = c.status === 'error' ? 'This part could not be loaded.' : '—';
+    el.replaceChildren(p);
+  }
+
+  function bmTip(el) {
+    const tip = document.createElement('div');
+    tip.className = 'bm-tip';
+    tip.hidden = true;
+    el.appendChild(tip);
+    return {
+      show: (ev, head, sub) => {
+        const b = document.createElement('span'); b.textContent = head;
+        const s = document.createElement('small'); s.textContent = sub;
+        tip.replaceChildren(b, s);
+        tip.hidden = false;
+        const box = el.getBoundingClientRect();
+        const w = tip.offsetWidth, h = tip.offsetHeight;
+        let x = ev.clientX - box.left + 12, y = ev.clientY - box.top - h - 8;
+        if (x + w > box.width) x = Math.max(0, box.width - w);
+        if (y < 0) y = ev.clientY - box.top + 14;
+        tip.style.left = x + 'px';
+        tip.style.top = y + 'px';
+      },
+      hide: () => { tip.hidden = true; }
+    };
+  }
+
+  dash.draw('repochart', (el) => {
+    const c = dash.data('by_repo');
+    if (c.status !== 'ok' || !Array.isArray(c.data) || !c.data.length) { bmMessage(el, c); return; }
+    el.replaceChildren();
+    const max = d3.max(c.data, (d) => d.total);
+    const tip = bmTip(el);
+    c.data.forEach((d) => {
+      const row = document.createElement('div'); row.className = 'bm-row';
+      const head = document.createElement('div'); head.className = 'bm-row-head';
+      const name = document.createElement('span'); name.textContent = d.repository;
+      const done = d['Complete'] + d['Failed'] + d['Download failed'];
+      const tot = document.createElement('span'); tot.textContent = done + ' of ' + d.total + ' finished';
+      head.append(name, tot);
+      const bar = document.createElement('div'); bar.className = 'bm-bar';
+      bar.style.width = (100 * d.total / max) + '%';
+      BM_ORDER.forEach((s) => {
+        if (!d[s]) return;
+        const seg = document.createElement('div'); seg.className = 'bm-seg';
+        seg.style.flex = d[s] + ' 1 0';
+        seg.style.background = BM_COLORS[s];
+        const show = (ev) => tip.show(ev, d.repository, (BM_LABEL[s] || s) + ': ' + d[s] + ' of ' + d.total);
+        seg.addEventListener('pointerenter', show);
+        seg.addEventListener('pointermove', show);
+        seg.addEventListener('pointerleave', tip.hide);
+        bar.appendChild(seg);
+      });
+      row.append(head, bar);
+      el.appendChild(row);
+    });
+  });
+
+  dash.draw('stepchart', (el) => {
+    const c = dash.data('fail_steps');
+    if (c.status !== 'ok' || !Array.isArray(c.data)) { bmMessage(el, c); return; }
+    el.replaceChildren();
+    const max = d3.max(c.data, (d) => d.n) || 1;
+    c.data.forEach((d) => {
+      const row = document.createElement('div'); row.className = 'bm-step' + (d.n ? '' : ' bm-step-zero');
+      const name = document.createElement('span'); name.textContent = d.step.replace('_', ' ');
+      const track = document.createElement('div'); track.className = 'bm-step-track';
+      const fill = document.createElement('div'); fill.className = 'bm-step-fill';
+      fill.style.width = (100 * d.n / max) + '%';
+      fill.style.background = BM_COLORS['Failed'];
+      track.appendChild(fill);
+      const n = document.createElement('span'); n.className = 'bm-step-n'; n.textContent = d.n;
+      row.append(name, track, n);
+      el.appendChild(row);
+    });
+  });
+
+  const BM_COLS = [
+    ['entry', 'bm-id'], ['status', ''], ['failed_step', ''], ['repository', ''], ['facility', ''], ['beamline', ''], ['detector', ''],
+    ['space_group', ''], ['sweeps', 'bm-r'], ['images', 'bm-r'], ['pct_indexed', 'bm-r'], ['d_min', 'bm-r'], ['sugg_d_min', 'bm-r'],
+    ['cc_half', 'bm-r'], ['sugg_cc_half', 'bm-r'], ['completeness', 'bm-r'], ['sugg_completeness', 'bm-r'], ['multiplicity', 'bm-r'], ['seconds', 'bm-r'], ['note', 'bm-wrap']
+  ];
+
+  dash.draw('rows', (el) => {
+    const c = dash.data('entries');
+    if (c.status !== 'ok' || !Array.isArray(c.data)) {
+      const tr = document.createElement('tr'); const td = document.createElement('td');
+      td.colSpan = BM_COLS.length; td.className = 'bm-msg';
+      td.textContent = c.status === 'error' ? 'The table could not be loaded.' : '—';
+      tr.appendChild(td); el.replaceChildren(tr); return;
+    }
+    const sel = document.querySelector('#bm-filter');
+    const want = sel ? sel.value : '';
+    const final = ['Complete', 'Failed', 'Download failed'];
+    const rows = c.data
+      .filter((e) => final.includes(e.status) && (!want || e.status === want))
+      .sort((a, b) => String(b.updated_utc || '').localeCompare(String(a.updated_utc || '')) || String(a.entry).localeCompare(String(b.entry)));
+    const frag = document.createDocumentFragment();
+    rows.forEach((e) => {
+      const tr = document.createElement('tr');
+      tr.dataset.key = encodeURIComponent(e.entry);
+      BM_COLS.forEach(([col, cls]) => {
+        const td = document.createElement('td');
+        if (cls) td.className = cls;
+        const v = e[col];
+        const text = (v === null || v === undefined) ? '' : String(v);
+        if (col === 'status') {
+          const pill = document.createElement('span'); pill.className = 'bm-pill';
+          const dot = document.createElement('i'); dot.className = 'bm-dot'; dot.style.background = BM_COLORS[e.status];
+          const t = document.createElement('span'); t.textContent = text;
+          pill.append(dot, t); td.appendChild(pill);
+        } else if (col === 'failed_step') {
+          td.textContent = text.replace('_', ' ');
+        } else if (col === 'images' && text !== '') {
+          td.textContent = bmFmt(+text);
+        } else {
+          td.textContent = text;
+        }
+        tr.appendChild(td);
+      });
+      frag.appendChild(tr);
+    });
+    el.replaceChildren(frag);
+  });
+
+  document.querySelectorAll('#bm-filter').forEach((sel) => sel.addEventListener('change', () => dash.draw('rows')));
+</script>
+
+<script>dash.runAll();</script>
+</body>
+</html>
