@@ -5,6 +5,37 @@
   "dxtbx": "3.31.0",
   "python": "3.14.10 (numpy 2.5.4, scipy 1.18.1, h5py 3.16.0)",
   "build_note": "DIALS is the 3.31.0 release; dials.version reports it as DIALS 3.31.",
-  "dates": "21 November 2026",
-  "note": "dials.scale is run with its defaults, so no resolution cutoff is applied to any dataset. The headline resolution, CC½, completeness and multiplicity are therefore for all scaled data. The \"suggested\" columns give the same statistics at the resolution limit dials.merge suggests, where a fit of CC½ falls to 0.3. In all_results.csv, overall_* holds the uncut statistics and suggested_* the statistics at the suggested limit."
+  "dates": "21 November 2026; scaling, export and merging re-run 24 November 2026",
+  "note": "dials.scale in DIALS 3.31.0 does not choose a resolution limit by itself, so the script scales each dataset twice. The first pass scales all data and prints the limit DIALS suggests, where a fit of CC½ falls to 0.3. The second pass scales the unscaled data again with d_min set to that limit, and the cut data are exported and merged. The resolution, CC½, completeness and multiplicity reported here are for the cut data. Where DIALS suggested no limit, the data are not cut. In all_results.csv, overall_* holds the statistics of the final data, suggested_d_min_cc_half_fit the limit that was applied, and seconds_scale the time of both scaling passes. The script was changed to this form after the first run: steps up to and including the first scaling pass date from 21 November, and only the second pass, export and merging were run again.",
+  "hide_columns": [
+    "sugg_d_min",
+    "sugg_cc_half",
+    "sugg_completeness"
+  ],
+  "replace": [
+    [
+      " Å with no resolution cutoff applied, the median overall",
+      " Å at the resolution limit DIALS suggests, the median overall"
+    ],
+    [
+      " Å** with no resolution cutoff applied (**nan Å** at the limit DIALS suggests), the median overall",
+      " Å** at the resolution limit DIALS suggests, the median overall"
+    ],
+    [
+      "are the overall values written by dials.merge for all scaled data, with no resolution cutoff. The \"suggested\" columns are the statistics dials.merge reports for the same data cut at the limit DIALS suggests, where a fit of CC½ falls to 0.3.",
+      "are the overall values written by dials.merge for the data cut at the limit DIALS suggests, where a fit of CC½ falls to 0.3."
+    ],
+    [
+      "are the overall values written by `dials.merge` for all scaled data, with no resolution cutoff. The \"suggested\" columns are the statistics `dials.merge` reports for the same data cut at the limit DIALS suggests, where a fit of CC½ falls to 0.3.",
+      "are the overall values written by `dials.merge` for the data cut at the limit DIALS suggests, where a fit of CC½ falls to 0.3."
+    ],
+    [
+      "No mask, resolution limit or repair was applied to any entry.",
+      "No mask or repair was applied to any entry, and the only resolution limit is the one the script reads from DIALS."
+    ],
+    [
+      "import, spot finding, indexing, refinement, integration, symmetry, scaling, export and merging",
+      "import, spot finding, indexing, refinement, integration, symmetry, two passes of scaling, export and merging"
+    ]
+  ]
 }

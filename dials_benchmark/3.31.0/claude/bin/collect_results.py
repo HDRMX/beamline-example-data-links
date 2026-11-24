@@ -8,8 +8,11 @@ Merging statistics come from dials.merge.log (dials.scale.log if merge did not r
 Column groups:
     overall_*          all scaled data
     overall_outer_*    highest-resolution bin of all scaled data
-    suggested_*        data cut at the CC1/2=0.3 limit suggested by DIALS
-    suggested_outer_*  highest-resolution shell of that cut
+tldr.sh scales twice (uncut pass scale_all, then a pass cut at the suggested limit), and
+the final logs describe the cut data: overall_* are the statistics of the cut data
+(the suggested_* groups a single uncut run would also have are dropped, see env.sh),
+suggested_d_min_cc_half_fit is the limit that was applied (from the first pass), and
+seconds_scale is the time of both passes together.
 """
 import csv
 import os
@@ -19,6 +22,8 @@ import sys
 ROOT = os.environ.get("HDRMX_ROOT") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROUND = os.environ.get("HDRMX_ROUND") or open(os.path.join(ROOT, "CURRENT_ROUND")).read().strip()
 STEPS = ["import", "find_spots", "index", "refine", "integrate", "symmetry", "scale", "export", "merge"]
+# the steps tldr.sh runs (env.sh HDRMX_STEPS); a step without a column of its own (scale_all) is timed with its parent
+RUN_STEPS = os.environ.get("HDRMX_STEPS", "").split() or STEPS
 SUMMARY_ROWS = [
     ("High resolution limit", "d_min"),
     ("Low resolution limit", "d_max"),
@@ -37,6 +42,9 @@ SUMMARY_ROWS = [
 ]
 METRICS = [m for _, m in SUMMARY_ROWS]
 GROUPS = ["overall", "overall_outer", "suggested", "suggested_outer"]
+# a round whose tldr.sh already cuts at the suggested limit lists the unused groups in
+# HDRMX_DROP_GROUPS (env.sh); their columns are then left out of results.csv
+DROP_GROUPS = os.environ.get("HDRMX_DROP_GROUPS", "").split()
 
 COLUMNS = (
     ["entry", "facility", "beamline", "detector", "link", "deposition_version",
@@ -51,7 +59,7 @@ COLUMNS = (
        "n_experiments_scaled", "error_model_a", "error_model_b",
        "model_source", "space_group", "cell_a", "cell_b", "cell_c", "cell_alpha", "cell_beta", "cell_gamma",
        "stats_source", "suggested_d_min_cc_half_fit", "wilson_b"]
-    + ["%s_%s" % (g, m) for g in GROUPS for m in METRICS]
+    + ["%s_%s" % (g, m) for g in GROUPS if g not in DROP_GROUPS for m in METRICS]
 )
 
 
@@ -162,15 +170,17 @@ def main():
         c = line.split("\t")
         if len(c) == 3:
             done[c[0]] = (c[1], c[2])
-            row["seconds_" + c[0]] = c[2]
-    failed = [s for s in STEPS if s in done and done[s][0] != "0"]
+            col = "seconds_" + (c[0] if c[0] in STEPS else c[0].rsplit("_", 1)[0])
+            if col in row:
+                row[col] = int(c[2]) + (int(row[col]) if row[col] != "" else 0)
+    failed = [s for s in RUN_STEPS if s in done and done[s][0] != "0"]
     if failed:
         row["pipeline_status"], row["failed_step"] = "failed", failed[0]
-    elif all(s in done for s in STEPS):
+    elif all(s in done for s in RUN_STEPS):
         row["pipeline_status"] = "complete"
     else:
         row["pipeline_status"] = "failed"
-        row["failed_step"] = next((s for s in STEPS if s not in done), "") if done else "input_selection"
+        row["failed_step"] = next((s for s in RUN_STEPS if s not in done), "") if done else "input_selection"
     if done:
         row["total_seconds"] = sum(int(v[1]) for v in done.values())
     row["dials_version"] = last(r"^(DIALS \d\S*)", read(P("tldr.log")))
@@ -251,10 +261,14 @@ def main():
             merging_stats(text, row)
             row["suggested_d_min_cc_half_fit"] = last(r"Resolution limit suggested from CC\S* fit[^:]*: *([\d.]+)", text)
             break
+    # the limit that was applied is the one suggested by the first, uncut scaling pass
+    first = read(P("dials.scale_all.log"))
+    if first:
+        row["suggested_d_min_cc_half_fit"] = last(r"Resolution limit suggested from CC\S* fit[^:]*: *([\d.]+)", first)
     row["wilson_b"] = last(r"Wilson B factor\s+([-\d.]+)", read(P("dials.merge.log")))
 
     with open(out, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
         w.writeheader()
         w.writerow(row)
     print("wrote", out)

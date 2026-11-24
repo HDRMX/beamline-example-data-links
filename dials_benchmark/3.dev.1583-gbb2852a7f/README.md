@@ -6,6 +6,8 @@ All datasets listed in <https://github.com/HDRMX/beamline-example-data-links> we
 
 Made with a development build of DIALS to be able to use the new d_min=auto feature of dials.scale, which is not yet in a DIALS release.
 
+`dials.scale d_min=auto` cuts each dataset at the resolution limit DIALS estimates from its CC½ fit. The `overall_*` columns of `all_results.csv` hold the statistics of the cut data, and `suggested_d_min_cc_half_fit` the limit that was applied. The table and report were brought to this layout on Nov 24 2026 from the existing logs, without re-running any processing; see [claude/round/HISTORY.md](claude/round/HISTORY.md).
+
 ## Contents
 
 | File | Description |

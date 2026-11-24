@@ -7,7 +7,7 @@ Reads rounds/ROUND/status.tsv, all_results.csv (run bin/aggregate.sh first), tld
 round.json (title, heading, note, software versions).  The HTML comes from
 bin/report_template.html.  Refuses to overwrite the report of a frozen round.
 """
-import collections, csv, html, json, os, statistics, sys, time
+import collections, csv, html, json, os, re, statistics, sys, time
 
 ROOT = os.environ.get("HDRMX_ROOT") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROUND = os.environ.get("HDRMX_ROUND") or open(os.path.join(ROOT, "CURRENT_ROUND")).read().strip()
@@ -40,11 +40,37 @@ for e in ent:
         g('suggested_completeness'), g('overall_multiplicity'), g('pct_indexed'), g('total_seconds'),
         s['updated_utc']])))
 assert not any(ROOT in ' '.join(r.values()) for r in rows)
+HIDE = set(cfg.get('hide_columns', []))
+COLS = [c for c in COLS if c not in HIDE]
+rows = [{k: r[k] for k in COLS} for r in rows]
 with open(os.path.join(RD, 'entries.csv'), 'w', newline='') as f:
     w = csv.DictWriter(f, fieldnames=COLS); w.writeheader(); w.writerows(rows)
 
 # ---------------- HTML
-t = open(os.path.join(ROOT, 'bin', 'report_template.html')).read()
+# Optional round.json keys for rounds that do not run the plain DIALS script:
+#   replace      [[old, new], ...] wording changes applied to the report prose (HTML and Markdown)
+#   system_rows  [[item, value], ...] extra rows at the top of the system table
+#   step_names   {step: label} for the failure table of the Markdown report
+#   note_title   heading of the note (default "About the statistics")
+#   hide_columns [field, ...] table columns left out of the report and entries.csv (e.g. the
+#                "suggested" columns of a round whose script already cuts at the suggested limit)
+REPL = cfg.get('replace', [])
+def sub(x):
+    for a, b in REPL:
+        x = x.replace(a, b)
+    return x
+SYSROWS = cfg.get('system_rows', [])
+NOTE_TITLE = cfg.get('note_title', 'About the statistics')
+t = sub(open(os.path.join(ROOT, 'bin', 'report_template.html')).read())
+for c in HIDE:
+    t, n1 = re.subn(r'\n *<th data-field="%s"[^\n]*' % c, '', t)
+    t, n2 = re.subn(r", \['%s', '[^']*'\]" % c, '', t)
+    assert (n1, n2) == (1, 1), c
+TR = '          <tr><th scope="row" style="text-align: left; font-weight: 600; padding: 6px 24px 6px 0; white-space: nowrap;">'
+assert t.count(TR + 'DIALS</th>') == 1
+t = t.replace(TR + 'DIALS</th>', ''.join('%s%s</th><td style="padding: 6px 0;">%s</td></tr>\n' % (TR, html.escape(a), html.escape(b)) for a, b in SYSROWS) + TR + 'DIALS</th>')
+assert t.count('<b>About the statistics.</b>') == 1
+t = t.replace('<b>About the statistics.</b>', '<b>%s.</b>' % html.escape(NOTE_TITLE))
 data = json.dumps([{k: (v if v != '' else None) for k, v in r.items()} for r in rows],
                   separators=(',', ':')).replace('</', '<\\/')
 E_ = html.escape
@@ -69,8 +95,8 @@ w('%d public depositions listed in [HDRMX/beamline-example-data-links](https://g
   % (len(rows), C['Complete'], C['Failed'], C['Download failed'], (' %d are still waiting or running.' % active) if active else ''))
 w('Every entry goes through import, spot finding, indexing, refinement, integration, symmetry, scaling, export and merging, with no per-dataset options. A failure is recorded as a result and is not repaired.\n')
 w('Among completed entries, the median high-resolution limit is **%.2f Å** with no resolution cutoff applied (**%.2f Å** at the limit DIALS suggests), the median overall CC½ is **%.3f**, and the median pipeline run takes **%.1f minutes** on 24 cores.\n'
-  % (med('d_min'), med('sugg_d_min'), med('cc_half'), med('seconds') / 60))
-w('> **About the statistics.** %s\n' % cfg['note'].replace('all_results.csv', '`all_results.csv`').replace('overall_*', '`overall_*`').replace('suggested_*', '`suggested_*`'))
+  % (med('d_min'), med('sugg_d_min') if 'sugg_d_min' in COLS else float('nan'), med('cc_half'), med('seconds') / 60))
+w('> **%s.** %s\n' % (NOTE_TITLE, cfg['note'].replace('all_results.csv', '`all_results.csv`').replace('overall_*', '`overall_*`').replace('suggested_*', '`suggested_*`')))
 w('An interactive version of this report, with a sortable and filterable table, is in [report.html](report.html). The full set of metrics per entry is in [all_results.csv](all_results.csv).\n')
 w('## Contents\n')
 for h in ('Results by repository', 'Where the pipeline stopped', 'How to read the failures', 'The pipeline script', 'System and software', 'All datasets'):
@@ -85,6 +111,7 @@ w('| **Total** | **%d** | **%d** | **%d** | **%d** |' % (len(rows), C['Complete'
 w('\n## Where the pipeline stopped\n')
 w('Failed entries counted by the first step that did not finish. Input selection means the fixed file rule found nothing to hand to `dials.import`.\n')
 NAMES = {'input_selection': 'Input selection', 'import': 'dials.import', 'find_spots': 'dials.find_spots', 'index': 'dials.index', 'refine': 'dials.refine', 'integrate': 'dials.integrate', 'symmetry': 'dials.symmetry', 'scale': 'dials.scale', 'export': 'dials.export', 'merge': 'dials.merge'}
+NAMES.update(cfg.get('step_names', {}))
 F = collections.Counter(r['failed_step'] for r in rows if r['status'] == 'Failed')
 w('| Step | Entries |\n| --- | ---: |')
 for k in NAMES:
@@ -113,7 +140,7 @@ Every entry was processed on the same machine with the same build. %s
 
 | Item | Value |
 | --- | --- |
-| DIALS | %s |
+%s| DIALS | %s |
 | dxtbx | %s |
 | Python | %s |
 | Linux | Rocky Linux 9.7 (Blue Onyx), kernel 5.14.0-611.49.1.el9_7.x86_64 |
@@ -124,8 +151,10 @@ Every entry was processed on the same machine with the same build. %s
 ## All datasets
 
 Entries are in the order of the source list. Resolution, CC½, completeness and multiplicity are the overall values written by `dials.merge` for all scaled data, with no resolution cutoff. The "suggested" columns are the statistics `dials.merge` reports for the same data cut at the limit DIALS suggests, where a fit of CC½ falls to 0.3. For failed downloads the last column gives the reason.
-''' % (cfg['build_note'].replace('dials.version', '`dials.version`'), cfg['dials'], cfg['dxtbx'], cfg['python'], cfg['dates']))
+''' % (cfg['build_note'].replace('dials.version', '`dials.version`'), ''.join('| %s | %s |\n' % (a, b) for a, b in SYSROWS), cfg['dials'], cfg['dxtbx'], cfg['python'], cfg['dates']))
+o[:] = [sub(x) for x in o]
 TC = [('Entry', 'entry'), ('Status', 'status'), ('Stopped at', 'failed_step'), ('Repository', 'repository'), ('Facility', 'facility'), ('Beamline', 'beamline'), ('Detector', 'detector'), ('Space group', 'space_group'), ('Sweeps', 'sweeps'), ('Images', 'images'), ('Indexed (%)', 'pct_indexed'), ('d min (Å)', 'd_min'), ('d min, suggested (Å)', 'sugg_d_min'), ('CC½', 'cc_half'), ('CC½, suggested', 'sugg_cc_half'), ('Complete (%)', 'completeness'), ('Complete, suggested (%)', 'sugg_completeness'), ('Multiplicity', 'multiplicity'), ('Run time (s)', 'seconds'), ('Download note', 'note')]
+TC = [x for x in TC if x[1] not in HIDE]
 NUM = {'sweeps', 'images', 'pct_indexed', 'd_min', 'sugg_d_min', 'cc_half', 'sugg_cc_half', 'completeness', 'sugg_completeness', 'multiplicity', 'seconds'}
 w('| ' + ' | '.join(c for c, _ in TC) + ' |')
 w('| ' + ' | '.join('---:' if k in NUM else '---' for _, k in TC) + ' |')
@@ -136,4 +165,4 @@ for r in rows:
 w('\nSnapshot of %s UTC.' % stamp)
 open(os.path.join(RD, 'report.md'), 'w').write('\n'.join(o) + '\n')
 print(ROUND, stamp, dict(C), 'failed steps', dict(F))
-print('medians: d_min %.2f  suggested d_min %.2f  CC1/2 %.3f  minutes %.1f' % (med('d_min'), med('sugg_d_min'), med('cc_half'), med('seconds') / 60))
+print('medians: d_min %.2f  suggested d_min %.2f  CC1/2 %.3f  minutes %.1f' % (med('d_min'), med('sugg_d_min') if 'sugg_d_min' in COLS else float('nan'), med('cc_half'), med('seconds') / 60))

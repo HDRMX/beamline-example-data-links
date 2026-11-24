@@ -36,6 +36,9 @@ SUMMARY_ROWS = [
 ]
 METRICS = [m for _, m in SUMMARY_ROWS]
 GROUPS = ["overall", "overall_outer", "suggested", "suggested_outer"]
+# dials.scale d_min=auto already cuts at the suggested limit, so the unused groups are
+# listed in HDRMX_DROP_GROUPS (env.sh) and their columns are left out of results.csv
+DROP_GROUPS = os.environ.get("HDRMX_DROP_GROUPS", "").split()
 
 COLUMNS = (
     ["entry", "facility", "beamline", "detector", "link", "deposition_version",
@@ -50,7 +53,7 @@ COLUMNS = (
        "n_experiments_scaled", "error_model_a", "error_model_b",
        "model_source", "space_group", "cell_a", "cell_b", "cell_c", "cell_alpha", "cell_beta", "cell_gamma",
        "stats_source", "suggested_d_min_cc_half_fit", "wilson_b"]
-    + ["%s_%s" % (g, m) for g in GROUPS for m in METRICS]
+    + ["%s_%s" % (g, m) for g in GROUPS if g not in DROP_GROUPS for m in METRICS]
 )
 
 
@@ -172,7 +175,7 @@ def main():
         row["failed_step"] = next((s for s in STEPS if s not in done), "") if done else "input_selection"
     if done:
         row["total_seconds"] = sum(int(v[1]) for v in done.values())
-    row["dials_version"] = last(r"^(DIALS \S+)", read(P("tldr.log")))
+    row["dials_version"] = last(r"^(DIALS \d\S*)", read(P("tldr.log")))
     row["n_import_args"] = len(read(P("import_args.txt")).split("\n")) - 1 if os.path.exists(P("import_args.txt")) else ""
 
     # ---- import
@@ -250,10 +253,14 @@ def main():
             merging_stats(text, row)
             row["suggested_d_min_cc_half_fit"] = last(r"Resolution limit suggested from CC\S* fit[^:]*: *([\d.]+)", text)
             break
+    # the limit that was applied: dials.scale d_min=auto reports the cut it makes
+    auto = last(r"^Applying auto resolution cut at ([\d.]+)", read(P("dials.scale.log")))
+    if auto or "d_min = Auto" in read(P("dials.scale.log")):
+        row["suggested_d_min_cc_half_fit"] = auto
     row["wilson_b"] = last(r"Wilson B factor\s+([-\d.]+)", read(P("dials.merge.log")))
 
     with open(out, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
         w.writeheader()
         w.writerow(row)
     print("wrote", out)

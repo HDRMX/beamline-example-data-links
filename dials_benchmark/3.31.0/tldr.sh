@@ -8,6 +8,9 @@
 # or NeXus/HDF5 master files; all sweeps of the entry go in together and are
 # indexed separately).  No other step takes per-dataset options.
 # nproc=24 only limits CPU use so that 8 entries can run side by side.
+# The data are scaled twice: once uncut, to read the resolution limit that DIALS
+# suggests (CC1/2 fit) from the log, and once more cut at that limit.  The final
+# scaled.*, scaled.mtz and merged.mtz are the cut data.
 # The script stops at the first step that fails.
 #
 # Files written to the current directory, besides the normal DIALS output:
@@ -49,7 +52,23 @@ run index      dials.index imported.expt strong.refl joint_indexing=False
 run refine     dials.refine indexed.expt indexed.refl
 run integrate  dials.integrate refined.expt refined.refl nproc=24
 run symmetry   dials.symmetry integrated.expt integrated.refl nproc=24
-run scale      dials.scale symmetrized.expt symmetrized.refl
+
+# First scaling pass: all data, only to find the resolution limit.
+run scale_all  dials.scale symmetrized.expt symmetrized.refl \
+                 output.log=dials.scale_all.log output.html=dials.scale_all.html \
+                 output.experiments=scaled_all.expt output.reflections=scaled_all.refl
+
+# The limit DIALS suggests from its CC1/2 fit (empty if it suggests none).
+DMIN=$(sed -n 's/^Resolution limit suggested from CC[^ ]* fit.*: *\([0-9.][0-9.]*\) *$/\1/p' dials.scale_all.log | tail -1)
+echo
+echo "### suggested resolution limit: ${DMIN:-none}"
+
+# Second scaling pass: again from the unscaled data, cut at that limit.
+if [ -n "$DMIN" ]; then
+  run scale    dials.scale symmetrized.expt symmetrized.refl d_min="$DMIN"
+else
+  run scale    dials.scale symmetrized.expt symmetrized.refl
+fi
 run export     dials.export scaled.expt scaled.refl
 run merge      dials.merge scaled.expt scaled.refl
 

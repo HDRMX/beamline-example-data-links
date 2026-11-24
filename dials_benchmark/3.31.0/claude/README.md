@@ -8,7 +8,7 @@ everything else is kept per round.
 | Path | Purpose |
 |---|---|
 | `CURRENT_ROUND` | name of the round the helpers work on (override with `HDRMX_ROUND`) |
-| `rounds/ROUND/tldr.sh` | the fixed pipeline of that round (nine DIALS commands) |
+| `rounds/ROUND/tldr.sh` | the fixed pipeline of that round (ten DIALS commands) |
 | `rounds/ROUND/env.sh` | selects the DIALS build of that round |
 | `rounds/ROUND/status.tsv` | status of every entry; changed only through `bin/status` |
 | `rounds/ROUND/all_results.csv` | all `results.csv` rows, built by `bin/aggregate.sh` |
@@ -25,7 +25,7 @@ Rounds:
 
 | Round | DIALS | Notes |
 |---|---|---|
-| `3.31.0` | release 3.31.0 in `builds/dials_3.31.0` | `dials.scale` with no resolution cutoff |
+| `3.31.0` | release 3.31.0 in `builds/dials_3.31.0` | `dials.scale` twice: uncut, then cut at the limit it suggests |
 
 | Script | Purpose |
 |---|---|
