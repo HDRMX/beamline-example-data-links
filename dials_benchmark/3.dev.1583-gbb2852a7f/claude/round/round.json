@@ -1,0 +1,45 @@
+{
+  "title": "DIALS Benchmark Report",
+  "heading": "DIALS benchmark report",
+  "dials": "3.dev.1583-gbb2852a7f",
+  "dxtbx": "3.31.dev0",
+  "python": "3.13.13 (numpy 2.4.3, scipy 1.17.1, h5py 3.16.0)",
+  "build_note": "DIALS is a development build, so the version is given as dials.version reports it.",
+  "dates": "19 to 21 November 2026",
+  "note": "dials.scale is run with d_min=auto, so it cuts each dataset at its own estimated resolution limit, where a fit of CC½ falls to 0.3. The resolution, CC½, completeness and multiplicity reported here are for the cut data. Where DIALS applied no cut, all data are kept. In all_results.csv, overall_* holds the statistics of the final data and suggested_d_min_cc_half_fit the limit that was applied.",
+  "hide_columns": [
+    "sugg_d_min",
+    "sugg_cc_half",
+    "sugg_completeness"
+  ],
+  "replace": [
+    [
+      " Å with no resolution cutoff applied, the median overall",
+      " Å after the automatic cutoff (dials.scale d_min=auto), the median overall"
+    ],
+    [
+      " Å** with no resolution cutoff applied (**nan Å** at the limit DIALS suggests), the median overall",
+      " Å** after the automatic cutoff (`dials.scale d_min=auto`), the median overall"
+    ],
+    [
+      "are the overall values written by dials.merge for all scaled data, with no resolution cutoff. The \"suggested\" columns are the statistics dials.merge reports for the same data cut at the limit DIALS suggests, where a fit of CC½ falls to 0.3.",
+      "are the overall values written by dials.merge after dials.scale cut the data at its own estimated limit (d_min=auto, where a fit of CC½ falls to 0.3)."
+    ],
+    [
+      "are the overall values written by `dials.merge` for all scaled data, with no resolution cutoff. The \"suggested\" columns are the statistics `dials.merge` reports for the same data cut at the limit DIALS suggests, where a fit of CC½ falls to 0.3.",
+      "are the overall values written by `dials.merge` after `dials.scale` cut the data at its own estimated limit (`d_min=auto`, where a fit of CC½ falls to 0.3)."
+    ],
+    [
+      "No mask, resolution limit or repair was applied to any entry.",
+      "Apart from the automatic cutoff that every entry gets, no mask, manual limit or repair was applied to any entry."
+    ],
+    [
+      "      <li>Low CC½ or low completeness",
+      "      <li>Archives in unrecognised formats were unpacked and run once. 36 proteindiffraction.org entries packed as .tz and 5 MX-RDR entries packed as .rar were first recorded as input selection failures because the downloader had not unpacked them. They were unpacked and then processed once with the unchanged script.</li>\n      <li>Low CC½ or low completeness"
+    ],
+    [
+      "- **Low CC½ or low completeness",
+      "- **Archives in unrecognised formats were unpacked and run once.** 36 proteindiffraction.org entries packed as `.tz` and 5 MX-RDR entries packed as `.rar` were first recorded as input selection failures because the downloader had not unpacked them. They were unpacked and then processed once with the unchanged script.\n- **Low CC½ or low completeness"
+    ]
+  ]
+}

@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""The ONLY way to read or change status.tsv (one line per entry, file-locked).
+
+  status init                       create status.tsv from entries.tsv (keeps existing rows)
+  status get ENTRY                  print the entry's status
+  status set ENTRY STATUS [NOTE]    set status (and note)
+  status claim ENTRY FROM TO [NOTE] set TO only if current status is FROM; exit 1 otherwise
+  status list STATUS                print entries with that status
+  status summary                    counts per status
+
+Statuses: "Not started", "Downloading", "Downloaded", "Download failed",
+          "In-progress", "Complete", "Failed"
+"""
+import fcntl, os, sys, time
+
+ROOT = os.environ.get("HDRMX_ROOT") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PATH = os.path.join(ROOT, "status.tsv")
+LOCK = os.path.join(ROOT, ".status.lock")
+VALID = ["Not started", "Downloading", "Downloaded", "Download failed", "In-progress", "Complete", "Failed"]
+HEADER = "entry\tstatus\tupdated_utc\tnote\n"
+
+
+def now():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def load():
+    rows = {}
+    if os.path.exists(PATH):
+        for line in open(PATH).read().splitlines()[1:]:
+            p = (line.split("\t") + ["", "", ""])[:4]
+            rows[p[0]] = p
+    return rows
+
+
+def save(rows):
+    tmp = PATH + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(HEADER)
+        for r in rows.values():
+            f.write("\t".join(r) + "\n")
+    os.replace(tmp, PATH)
+
+
+def clean(s):
+    return " ".join(s.split())[:300]
+
+
+def main(a):
+    if not a:
+        sys.exit(__doc__)
+    cmd = a[0]
+    with open(LOCK, "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        rows = load()
+        if cmd == "init":
+            for line in open(os.path.join(ROOT, "entries.tsv")).read().splitlines()[1:]:
+                e = line.split("\t")[0]
+                rows.setdefault(e, [e, "Not started", now(), ""])
+            save(rows)
+            print(len(rows), "entries in status.tsv")
+        elif cmd == "get" and len(a) == 2:
+            if a[1] not in rows: sys.exit("unknown entry " + a[1])
+            print(rows[a[1]][1])
+        elif cmd in ("set", "claim"):
+            n = 3 if cmd == "set" else 4
+            if len(a) < n: sys.exit(__doc__)
+            e, new = a[1], a[n - 1]
+            note = clean(" ".join(a[n:]))
+            if e not in rows: sys.exit("unknown entry " + e)
+            if new not in VALID: sys.exit("invalid status %r; valid: %s" % (new, VALID))
+            if cmd == "claim" and rows[e][1] != a[2]:
+                print("not claimed: %s is %r, not %r" % (e, rows[e][1], a[2]))
+                sys.exit(1)
+            rows[e] = [e, new, now(), note]
+            save(rows)
+            print(e, "->", new)
+        elif cmd == "list" and len(a) == 2:
+            for r in rows.values():
+                if r[1] == a[1]: print(r[0])
+        elif cmd == "summary":
+            for s in VALID:
+                print("%5d  %s" % (sum(1 for r in rows.values() if r[1] == s), s))
+        else:
+            sys.exit(__doc__)
+
+
+main(sys.argv[1:])

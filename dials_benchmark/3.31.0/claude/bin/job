@@ -1,0 +1,30 @@
+#!/bin/bash
+# Run a long command detached from the caller, and wait for it in bounded steps.
+#   job start ENTRY NAME command [args...]   start detached; returns immediately
+#   job wait  ENTRY NAME                     block up to ~9 minutes; prints
+#                                            "RUNNING" or "EXITED <code>" plus the last log lines
+# Log: entries/ENTRY/NAME.job.log; for NAME=process it is kept per round in
+# entries/ENTRY/rounds/ROUND/ (ROUND = $HDRMX_ROUND or the content of ROOT/CURRENT_ROUND).
+ROOT=${HDRMX_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
+cmd=${1:?}; ID=${2:?}; NAME=${3:?}; shift 3
+D=$ROOT/entries/$ID
+if [ "$NAME" = process ]; then D=$D/rounds/${HDRMX_ROUND:-$(cat "$ROOT/CURRENT_ROUND")}; fi
+mkdir -p "$D"
+P=$D/.$NAME.pid; R=$D/.$NAME.rc; L=$D/$NAME.job.log
+case $cmd in
+  start)
+    if [ -e "$P" ] && kill -0 "$(cat "$P")" 2>/dev/null; then echo "already running"; exit 1; fi
+    rm -f "$R"
+    setsid nohup bash -c 'L=$0; R=$1; shift; "$@" > "$L" 2>&1; echo $? > "$R.tmp"; mv "$R.tmp" "$R"' "$L" "$R" "$@" < /dev/null > /dev/null 2>&1 &
+    echo $! > "$P"; echo "started $NAME for $ID" ;;
+  wait)
+    for _ in $(seq 54); do
+      [ -e "$R" ] && break
+      kill -0 "$(cat "$P" 2>/dev/null)" 2>/dev/null || { sleep 2; break; }
+      sleep 10
+    done
+    if [ -e "$R" ]; then echo "EXITED $(cat "$R")"; tail -n 5 "$L"
+    elif kill -0 "$(cat "$P" 2>/dev/null)" 2>/dev/null; then echo "RUNNING"
+    else echo "EXITED unknown (process gone without exit code)"; tail -n 5 "$L"; fi ;;
+  *) echo "usage: job start|wait ENTRY NAME [command...]"; exit 2 ;;
+esac
